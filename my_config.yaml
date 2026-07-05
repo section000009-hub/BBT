@@ -5,16 +5,16 @@
 model: yolo26n.pt
 data: ./dataset/data.yaml
 epochs: 5000
-batch: 32          # 16→32: 3070 Ti 8GB + yolo26n nano에서 여유 충분 (VRAM ~5-6GB 예상)
+batch: 32 # 16→32: 3070 Ti 8GB + yolo26n nano에서 여유 충분 (VRAM ~5-6GB 예상)
 imgsz: 640
 device: 0
 patience: 100
-workers: 8         # CPU 20코어 활용, 데이터로딩 병목 제거
-cache: True        # 286장 전체 RAM 캐시 (32GB RAM 여유, epoch당 디스크 I/O 제거)
-amp: True          # AMP FP16 가속 (RTX 3070 Ti Ampere 텐서코어)
+workers: 8 # CPU 20코어 활용, 데이터로딩 병목 제거
+cache: True # 286장 전체 RAM 캐시 (32GB RAM 여유, epoch당 디스크 I/O 제거)
+amp: True # AMP FP16 가속 (RTX 3070 Ti Ampere 텐서코어)
 project: ./runs
 name: phase1_ox_black
-save_period: 100   # 장기 학습 중 100에포크마다 중간 체크포인트 백업
+save_period: 100 # 장기 학습 중 100에포크마다 중간 체크포인트 백업
 
 # optimizer: SGD   # detect task 기본값, 필요시 명시
 # lr0: 0.01
