@@ -2,20 +2,20 @@
 """
 BBT O/X 자동클릭 프로그램  —  auto_click_debug.py
 Phase 1: X_BLACK 감지 → 즉시 클릭  /  O_BLACK·Ban → 무시
-단축키 F9 : 캡처 → 추론 → 일괄 클릭
+단축키 F9 : 캡처 → 추론 → 일괄 클릭.
 """
 
-import os
-import sys
 import json
+import os
 import queue
+import sys
 import threading
 import time
-from datetime import datetime
-from ctypes import windll
-
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from ctypes import windll
+from datetime import datetime
+from tkinter import filedialog, messagebox, ttk
+
 import numpy as np
 from PIL import Image, ImageTk
 
@@ -42,6 +42,7 @@ except ImportError:
 
 try:
     import pydirectinput
+
     pydirectinput.PAUSE = 0
 except ImportError:
     pydirectinput = None
@@ -59,7 +60,7 @@ except ImportError:
 # ── 상수 ─────────────────────────────────────────────────────
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings_autoclicker.json")
 APP_TITLE = "BBT 자동클릭"
-VERSION   = "1.0"
+VERSION = "1.0"
 
 DEFAULT_SIM_FOLDER = (
     r"D:\VIBE\데이터 셋\3차 라벨링_260609"
@@ -67,47 +68,61 @@ DEFAULT_SIM_FOLDER = (
 )
 
 DEFAULT_SETTINGS: dict = {
-    "weight_path":     "",
-    "device":          "cpu",
-    "conf":            0.50,
-    "iou":             0.45,
-    "imgsz":           320,
-    "click_order":     "top_left",
-    "capture_region":  None,
+    "weight_path": "",
+    "device": "cpu",
+    "conf": 0.50,
+    "iou": 0.45,
+    "imgsz": 320,
+    "click_order": "top_left",
+    "capture_region": None,
     "window_geometry": "480x920+0+0",
-    "always_on_top":   True,
-    "dark_mode":       False,
-    "hotkey":          "f9",
-    "sim_folder":      DEFAULT_SIM_FOLDER,
+    "always_on_top": True,
+    "dark_mode": False,
+    "hotkey": "f9",
+    "sim_folder": DEFAULT_SIM_FOLDER,
 }
 
-CLICK_ORDER_KEYS    = ["top_left",       "left_top",       "confidence"]
-CLICK_ORDER_LABELS  = ["위→아래 / 좌→우", "좌→우 / 위→아래", "Confidence 높은 순"]
+CLICK_ORDER_KEYS = ["top_left", "left_top", "confidence"]
+CLICK_ORDER_LABELS = ["위→아래 / 좌→우", "좌→우 / 위→아래", "Confidence 높은 순"]
 
 # 클래스 색상 (BGR → draw용 RGB)
 CLS_COLOR = {
-    "X_BLACK": (50, 220, 50),    # 초록
-    "O_BLACK": (255, 160, 30),   # 주황
-    "Ban":     (80, 140, 255),   # 파랑
+    "X_BLACK": (50, 220, 50),  # 초록
+    "O_BLACK": (255, 160, 30),  # 주황
+    "Ban": (80, 140, 255),  # 파랑
 }
 
 # ── 테마 팔레트 ───────────────────────────────────────────────
 THEMES = {
     "dark": dict(
-        bg="#1e1e1e", fg="#e0e0e0",
-        panel="#2d2d2d", entry="#3c3c3c",
-        btn="#404040", btn_fg="#e0e0e0",
-        accent="#0078d4", log_bg="#141414",
-        preview_bg="#111111", tag_ok="#2ecc71",
-        tag_warn="#e67e22", tag_err="#e74c3c", tag_info="#3498db",
+        bg="#1e1e1e",
+        fg="#e0e0e0",
+        panel="#2d2d2d",
+        entry="#3c3c3c",
+        btn="#404040",
+        btn_fg="#e0e0e0",
+        accent="#0078d4",
+        log_bg="#141414",
+        preview_bg="#111111",
+        tag_ok="#2ecc71",
+        tag_warn="#e67e22",
+        tag_err="#e74c3c",
+        tag_info="#3498db",
     ),
     "light": dict(
-        bg="#f0f0f0", fg="#1e1e1e",
-        panel="#e0e0e0", entry="#ffffff",
-        btn="#d0d0d0", btn_fg="#1e1e1e",
-        accent="#0078d4", log_bg="#ffffff",
-        preview_bg="#cccccc", tag_ok="#1a7a40",
-        tag_warn="#b7600a", tag_err="#c0392b", tag_info="#1a5fa8",
+        bg="#f0f0f0",
+        fg="#1e1e1e",
+        panel="#e0e0e0",
+        entry="#ffffff",
+        btn="#d0d0d0",
+        btn_fg="#1e1e1e",
+        accent="#0078d4",
+        log_bg="#ffffff",
+        preview_bg="#cccccc",
+        tag_ok="#1a7a40",
+        tag_warn="#b7600a",
+        tag_err="#c0392b",
+        tag_info="#1a5fa8",
     ),
 }
 
@@ -132,13 +147,15 @@ class RegionSelector(tk.Toplevel):
         self.cv.pack(fill="both", expand=True)
 
         tk.Label(
-            self.cv, bg="black", fg="white",
+            self.cv,
+            bg="black",
+            fg="white",
             text="BBT 창 영역을 드래그하여 선택하세요    (ESC = 취소)",
             font=("Segoe UI", 13),
         ).place(relx=0.5, rely=0.04, anchor="center")
 
-        self.cv.bind("<ButtonPress-1>",   self._press)
-        self.cv.bind("<B1-Motion>",       self._drag)
+        self.cv.bind("<ButtonPress-1>", self._press)
+        self.cv.bind("<B1-Motion>", self._drag)
         self.cv.bind("<ButtonRelease-1>", self._release)
         self.bind("<Escape>", lambda _: self.destroy())
 
@@ -151,8 +168,13 @@ class RegionSelector(tk.Toplevel):
         if self._rect_id:
             self.cv.delete(self._rect_id)
         self._rect_id = self.cv.create_rectangle(
-            self._sx, self._sy, e.x_root, e.y_root,
-            outline="#ff4444", width=2, dash=(5, 3),
+            self._sx,
+            self._sy,
+            e.x_root,
+            e.y_root,
+            outline="#ff4444",
+            width=2,
+            dash=(5, 3),
         )
 
     def _release(self, e):
@@ -169,20 +191,19 @@ class RegionSelector(tk.Toplevel):
 # AutoClickApp
 # ════════════════════════════════════════════════════════════
 class AutoClickApp:
-
     def __init__(self, root: tk.Tk):
-        self.root      = root
-        self.settings  = self._load_settings()
-        self.model     = None
+        self.root = root
+        self.settings = self._load_settings()
+        self.model = None
         self.cap_region: dict | None = self.settings.get("capture_region")
 
-        self._running   = False
-        self._is_busy   = False
+        self._running = False
+        self._is_busy = False
         self._work_q: queue.Queue = queue.Queue()
-        self._ui_q:   queue.Queue = queue.Queue()
-        self._preview_photo       = None
-        self._canvas_size         = (460, 240)
-        self._run_params: dict    = {}
+        self._ui_q: queue.Queue = queue.Queue()
+        self._preview_photo = None
+        self._canvas_size = (460, 240)
+        self._run_params: dict = {}
 
         self._build_window()
         self._build_menu()
@@ -221,17 +242,17 @@ class AutoClickApp:
 
         mw = tk.Menu(mb, tearoff=0)
         mb.add_cascade(label="창 설정", menu=mw)
-        mw.add_command(label="좌측 좁게  (380px)",       command=lambda: self._resize_w(380))
+        mw.add_command(label="좌측 좁게  (380px)", command=lambda: self._resize_w(380))
         mw.add_command(label="좌측 보통  (480px)  ← 기본", command=lambda: self._resize_w(480))
-        mw.add_command(label="좌측 넓게  (600px)",       command=lambda: self._resize_w(600))
+        mw.add_command(label="좌측 넓게  (600px)", command=lambda: self._resize_w(600))
         mw.add_separator()
-        mw.add_command(label="현재 크기/위치 저장",  command=self._save_win_pos)
+        mw.add_command(label="현재 크기/위치 저장", command=self._save_win_pos)
         mw.add_command(label="위치 초기화 (좌상단)", command=lambda: self.root.geometry("480x920+0+0"))
 
         mh = tk.Menu(mb, tearoff=0)
         mb.add_cascade(label="도움말", menu=mh)
         mh.add_command(label=f"v{VERSION}  —  BBT 자동클릭", state="disabled")
-        mh.add_command(label="F9 : 캡처 & 클릭 실행",        state="disabled")
+        mh.add_command(label="F9 : 캡처 & 클릭 실행", state="disabled")
 
     # ── UI 탭 ─────────────────────────────────────────────────
     def _build_ui(self):
@@ -259,7 +280,8 @@ class AutoClickApp:
         self._frm_ctrl = frm
 
         # 가중치 ────────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=2)
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=2)
         tk.Label(r, text="가중치", width=8, anchor="w").pack(side="left")
         self._var_weight = tk.StringVar(value=self.settings.get("weight_path", ""))
         ent = tk.Entry(r, textvariable=self._var_weight, state="readonly", width=20)
@@ -268,36 +290,43 @@ class AutoClickApp:
         tk.Button(r, text="📁", width=3, command=self._select_weight).pack(side="left")
 
         # 장치 / 항상위 / 다크모드 ──────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=2)
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=2)
         tk.Label(r, text="장치", width=8, anchor="w").pack(side="left")
         self._var_device = tk.StringVar(value=self.settings.get("device", "cpu"))
         tk.Radiobutton(r, text="CPU", variable=self._var_device, value="cpu").pack(side="left")
         tk.Radiobutton(r, text="GPU (CUDA)", variable=self._var_device, value="cuda:0").pack(side="left", padx=(6, 0))
 
         self._var_dark = tk.BooleanVar(value=self.settings.get("dark_mode", False))
-        tk.Checkbutton(r, text="◑다크", variable=self._var_dark,
-                       command=self._toggle_dark).pack(side="right", padx=2)
+        tk.Checkbutton(r, text="◑다크", variable=self._var_dark, command=self._toggle_dark).pack(side="right", padx=2)
         self._var_top = tk.BooleanVar(value=self.settings.get("always_on_top", True))
-        tk.Checkbutton(r, text="📌항상위", variable=self._var_top,
-                       command=self._toggle_topmost).pack(side="right", padx=2)
+        tk.Checkbutton(r, text="📌항상위", variable=self._var_top, command=self._toggle_topmost).pack(
+            side="right", padx=2
+        )
 
         # conf / iou 슬라이더 ────────────────────────────────────
         self._var_conf = tk.DoubleVar(value=self.settings.get("conf", 0.50))
-        self._var_iou  = tk.DoubleVar(value=self.settings.get("iou",  0.45))
+        self._var_iou = tk.DoubleVar(value=self.settings.get("iou", 0.45))
         for label, var in [("conf", self._var_conf), ("iou", self._var_iou)]:
-            r = tk.Frame(frm); r.pack(fill="x", pady=1)
+            r = tk.Frame(frm)
+            r.pack(fill="x", pady=1)
             tk.Label(r, text=label, width=8, anchor="w").pack(side="left")
             val_lbl = tk.Label(r, width=5, anchor="e")
             val_lbl.pack(side="right")
-            sc = tk.Scale(r, variable=var, from_=0.05, to=0.95, resolution=0.05,
-                          orient="horizontal", showvalue=False, length=180)
+            sc = tk.Scale(
+                r, variable=var, from_=0.05, to=0.95, resolution=0.05, orient="horizontal", showvalue=False, length=180
+            )
             sc.pack(side="left", fill="x", expand=True)
-            def _cb(v, lv=val_lbl): lv.config(text=f"{float(v):.2f}")
+
+            def _cb(v, lv=val_lbl):
+                lv.config(text=f"{float(v):.2f}")
+
             sc.config(command=_cb)
             _cb(var.get())
 
         # imgsz ──────────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=2)
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=2)
         tk.Label(r, text="imgsz", width=8, anchor="w").pack(side="left")
         self._var_imgsz = tk.IntVar(value=self.settings.get("imgsz", 320))
         for v in [320, 640]:
@@ -305,40 +334,50 @@ class AutoClickApp:
         tk.Label(r, text="← 저사양 CPU = 320 권장", font=("Segoe UI", 8)).pack(side="left", padx=6)
 
         # 클릭 순서 ──────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=2)
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=2)
         tk.Label(r, text="클릭순서", width=8, anchor="w").pack(side="left")
-        saved_order  = self.settings.get("click_order", "top_left")
-        saved_idx    = CLICK_ORDER_KEYS.index(saved_order) if saved_order in CLICK_ORDER_KEYS else 0
+        saved_order = self.settings.get("click_order", "top_left")
+        saved_idx = CLICK_ORDER_KEYS.index(saved_order) if saved_order in CLICK_ORDER_KEYS else 0
         self._var_order_disp = tk.StringVar(value=CLICK_ORDER_LABELS[saved_idx])
-        ttk.Combobox(r, textvariable=self._var_order_disp, width=24, state="readonly",
-                     values=CLICK_ORDER_LABELS).pack(side="left", padx=(2, 0))
+        ttk.Combobox(r, textvariable=self._var_order_disp, width=24, state="readonly", values=CLICK_ORDER_LABELS).pack(
+            side="left", padx=(2, 0)
+        )
 
         # 캡처 영역 ──────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=2)
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=2)
         tk.Label(r, text="캡처영역", width=8, anchor="w").pack(side="left")
         self._lbl_region = tk.Label(r, text="미설정", anchor="w", width=22)
         self._lbl_region.pack(side="left", fill="x", expand=True, padx=2)
-        tk.Button(r, text="영역 설정", command=self._select_capture_region,
-                  width=8).pack(side="left")
+        tk.Button(r, text="영역 설정", command=self._select_capture_region, width=8).pack(side="left")
 
         # 시작 / 정지 ────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=(8, 2))
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=(8, 2))
         self._btn_start = tk.Button(
-            r, text="▶  시작  (F9 활성화)",
+            r,
+            text="▶  시작  (F9 활성화)",
             command=self._start,
-            font=("Segoe UI", 10, "bold"), width=20, height=1,
+            font=("Segoe UI", 10, "bold"),
+            width=20,
+            height=1,
         )
         self._btn_start.pack(side="left", padx=(0, 6))
         self._btn_stop = tk.Button(
-            r, text="■  정지",
+            r,
+            text="■  정지",
             command=self._stop,
-            font=("Segoe UI", 10, "bold"), width=10, height=1,
+            font=("Segoe UI", 10, "bold"),
+            width=10,
+            height=1,
             state="disabled",
         )
         self._btn_stop.pack(side="left")
 
         # 상태 표시 ──────────────────────────────────────────────
-        r = tk.Frame(frm); r.pack(fill="x", pady=(2, 0))
+        r = tk.Frame(frm)
+        r.pack(fill="x", pady=(2, 0))
         self._lbl_status = tk.Label(r, text="● 대기 중", anchor="w", font=("Segoe UI", 9))
         self._lbl_status.pack(side="left")
         self._lbl_model = tk.Label(r, text="모델 미로드", anchor="e", font=("Segoe UI", 8))
@@ -346,16 +385,16 @@ class AutoClickApp:
 
     # ── 화면 프리뷰 ───────────────────────────────────────────
     def _build_preview(self, parent):
-        frm = tk.LabelFrame(parent, text="  화면 프리뷰  (F9 실행 시 갱신)  ",
-                             padx=4, pady=4)
+        frm = tk.LabelFrame(parent, text="  화면 프리뷰  (F9 실행 시 갱신)  ", padx=4, pady=4)
         frm.pack(fill="both", expand=True, padx=6, pady=2)
         self._frm_preview = frm
         self._canvas = tk.Canvas(frm, bg="#111111", height=240, highlightthickness=0)
         self._canvas.pack(fill="both", expand=True)
         self._canvas.bind("<Configure>", lambda e: setattr(self, "_canvas_size", (e.width, e.height)))
         # 초기 안내 텍스트
-        self._canvas.create_text(230, 120, text="F9를 누르면 캡처 화면이 표시됩니다",
-                                 fill="#555555", font=("Segoe UI", 10), tags="hint")
+        self._canvas.create_text(
+            230, 120, text="F9를 누르면 캡처 화면이 표시됩니다", fill="#555555", font=("Segoe UI", 10), tags="hint"
+        )
 
     # ── 실행 로그 ─────────────────────────────────────────────
     def _build_log(self, parent):
@@ -364,21 +403,21 @@ class AutoClickApp:
         self._frm_log = frm
 
         # 툴바 (클리어 버튼)
-        tb = tk.Frame(frm); tb.pack(fill="x", anchor="e")
-        tk.Button(tb, text="로그 지우기", font=("Segoe UI", 8),
-                  command=self._clear_log).pack(side="right")
+        tb = tk.Frame(frm)
+        tb.pack(fill="x", anchor="e")
+        tk.Button(tb, text="로그 지우기", font=("Segoe UI", 8), command=self._clear_log).pack(side="right")
 
         sb = tk.Scrollbar(frm)
         sb.pack(side="right", fill="y")
-        self._log_text = tk.Text(frm, height=9, state="disabled",
-                                  yscrollcommand=sb.set, wrap="word",
-                                  font=("Consolas", 8))
+        self._log_text = tk.Text(
+            frm, height=9, state="disabled", yscrollcommand=sb.set, wrap="word", font=("Consolas", 8)
+        )
         self._log_text.pack(fill="both", expand=True)
         sb.config(command=self._log_text.yview)
 
-        self._log_text.tag_config("ok",   foreground="#2ecc71")
+        self._log_text.tag_config("ok", foreground="#2ecc71")
         self._log_text.tag_config("warn", foreground="#e67e22")
-        self._log_text.tag_config("err",  foreground="#e74c3c")
+        self._log_text.tag_config("err", foreground="#e74c3c")
         self._log_text.tag_config("info", foreground="#3498db")
 
     # ── Tab B (Phase 2 placeholder) ───────────────────────────
@@ -386,7 +425,8 @@ class AutoClickApp:
         tk.Label(
             self.tab_b,
             text="Phase 2  (O_RED / X_RED)\n\n미구성 — 추후 개발 예정",
-            font=("Segoe UI", 11), justify="center",
+            font=("Segoe UI", 11),
+            justify="center",
         ).pack(expand=True)
 
     # ── 테마 적용 ─────────────────────────────────────────────
@@ -401,23 +441,21 @@ class AutoClickApp:
                 elif cls == "Label":
                     w.configure(bg=t["bg"], fg=t["fg"])
                 elif cls == "Button":
-                    w.configure(bg=t["btn"], fg=t["btn_fg"],
-                                activebackground=t["accent"],
-                                relief="flat", borderwidth=1)
+                    w.configure(bg=t["btn"], fg=t["btn_fg"], activebackground=t["accent"], relief="flat", borderwidth=1)
                 elif cls in ("Radiobutton", "Checkbutton"):
-                    w.configure(bg=t["bg"], fg=t["fg"],
-                                activebackground=t["bg"], selectcolor=t["entry"])
+                    w.configure(bg=t["bg"], fg=t["fg"], activebackground=t["bg"], selectcolor=t["entry"])
                 elif cls == "Scale":
-                    w.configure(bg=t["bg"], fg=t["fg"],
-                                troughcolor=t["entry"], activebackground=t["accent"])
+                    w.configure(bg=t["bg"], fg=t["fg"], troughcolor=t["entry"], activebackground=t["accent"])
                 elif cls == "Entry":
-                    w.configure(bg=t["entry"], fg=t["fg"],
-                                insertbackground=t["fg"],
-                                disabledbackground=t["panel"],
-                                disabledforeground=t["fg"])
+                    w.configure(
+                        bg=t["entry"],
+                        fg=t["fg"],
+                        insertbackground=t["fg"],
+                        disabledbackground=t["panel"],
+                        disabledforeground=t["fg"],
+                    )
                 elif cls == "Text":
-                    w.configure(bg=t["log_bg"], fg=t["fg"],
-                                insertbackground=t["fg"])
+                    w.configure(bg=t["log_bg"], fg=t["fg"], insertbackground=t["fg"])
                 elif cls == "Canvas":
                     w.configure(bg=t["preview_bg"])
             except tk.TclError:
@@ -429,29 +467,24 @@ class AutoClickApp:
 
         # 로그 태그 색상 갱신
         try:
-            self._log_text.tag_config("ok",   foreground=t["tag_ok"])
+            self._log_text.tag_config("ok", foreground=t["tag_ok"])
             self._log_text.tag_config("warn", foreground=t["tag_warn"])
-            self._log_text.tag_config("err",  foreground=t["tag_err"])
+            self._log_text.tag_config("err", foreground=t["tag_err"])
             self._log_text.tag_config("info", foreground=t["tag_info"])
         except AttributeError:
             pass
 
         style = ttk.Style()
-        style.configure("TNotebook",     background=t["bg"])
-        style.configure("TNotebook.Tab", background=t["btn"],
-                        foreground=t["fg"], padding=[10, 4])
-        style.map("TNotebook.Tab",
-                  background=[("selected", t["accent"])],
-                  foreground=[("selected", "#ffffff")])
-        style.configure("TCombobox",
-                        fieldbackground=t["entry"], foreground=t["fg"],
-                        background=t["btn"])
+        style.configure("TNotebook", background=t["bg"])
+        style.configure("TNotebook.Tab", background=t["btn"], foreground=t["fg"], padding=[10, 4])
+        style.map("TNotebook.Tab", background=[("selected", t["accent"])], foreground=[("selected", "#ffffff")])
+        style.configure("TCombobox", fieldbackground=t["entry"], foreground=t["fg"], background=t["btn"])
 
     # ── Settings ──────────────────────────────────────────────
     def _load_settings(self) -> dict:
         if os.path.exists(SETTINGS_FILE):
             try:
-                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                with open(SETTINGS_FILE, encoding="utf-8") as f:
                     return {**DEFAULT_SETTINGS, **json.load(f)}
             except Exception:
                 pass
@@ -460,35 +493,31 @@ class AutoClickApp:
     def _save_settings(self):
         try:
             disp = self._var_order_disp.get()
-            order_key = CLICK_ORDER_KEYS[
-                CLICK_ORDER_LABELS.index(disp)
-            ] if disp in CLICK_ORDER_LABELS else "top_left"
+            order_key = CLICK_ORDER_KEYS[CLICK_ORDER_LABELS.index(disp)] if disp in CLICK_ORDER_LABELS else "top_left"
 
             s = {
-                "weight_path":     self._var_weight.get(),
-                "device":          self._var_device.get(),
-                "conf":            round(self._var_conf.get(), 2),
-                "iou":             round(self._var_iou.get(), 2),
-                "imgsz":           self._var_imgsz.get(),
-                "click_order":     order_key,
-                "capture_region":  self.cap_region,
+                "weight_path": self._var_weight.get(),
+                "device": self._var_device.get(),
+                "conf": round(self._var_conf.get(), 2),
+                "iou": round(self._var_iou.get(), 2),
+                "imgsz": self._var_imgsz.get(),
+                "click_order": order_key,
+                "capture_region": self.cap_region,
                 "window_geometry": self.root.geometry(),
-                "always_on_top":   self._var_top.get(),
-                "dark_mode":       self._var_dark.get(),
-                "hotkey":          self.settings.get("hotkey", "f9"),
+                "always_on_top": self._var_top.get(),
+                "dark_mode": self._var_dark.get(),
+                "hotkey": self.settings.get("hotkey", "f9"),
             }
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(s, f, ensure_ascii=False, indent=2)
             self.settings = s
-        except Exception as e:
+        except Exception:
             pass  # 종료 중 오류 무시
 
     def _refresh_region_label(self):
         if self.cap_region:
             r = self.cap_region
-            self._lbl_region.config(
-                text=f"({r['x']}, {r['y']})  {r['w']} × {r['h']} px"
-            )
+            self._lbl_region.config(text=f"({r['x']}, {r['y']})  {r['w']} × {r['h']} px")
 
     # ── 가중치 선택 & 모델 로드 ───────────────────────────────
     def _select_weight(self):
@@ -510,20 +539,20 @@ class AutoClickApp:
     def _load_model(self):
         path = self._var_weight.get()
         if not path or not os.path.exists(path):
-            self._ui_q.put(("log",    ("가중치 파일을 찾을 수 없습니다.", "err")))
-            self._ui_q.put(("model",  "미로드"))
+            self._ui_q.put(("log", ("가중치 파일을 찾을 수 없습니다.", "err")))
+            self._ui_q.put(("model", "미로드"))
             return
         if YOLO is None:
-            self._ui_q.put(("log",   ("ultralytics 미설치. pip install ultralytics", "err")))
+            self._ui_q.put(("log", ("ultralytics 미설치. pip install ultralytics", "err")))
             return
         try:
             m = YOLO(path)
             self.model = m
             names = list(m.names.values()) if hasattr(m, "names") else []
-            self._ui_q.put(("log",   (f"모델 로드 완료  ·  클래스: {names}", "ok")))
+            self._ui_q.put(("log", (f"모델 로드 완료  ·  클래스: {names}", "ok")))
             self._ui_q.put(("model", f"✔ {os.path.basename(path)}"))
         except Exception as e:
-            self._ui_q.put(("log",   (f"모델 로드 실패: {e}", "err")))
+            self._ui_q.put(("log", (f"모델 로드 실패: {e}", "err")))
             self._ui_q.put(("model", "로드 실패"))
 
     # ── 캡처 영역 선택 ────────────────────────────────────────
@@ -535,37 +564,38 @@ class AutoClickApp:
         self.root.deiconify()
         self.cap_region = region
         self._refresh_region_label()
-        self._log(
-            f"캡처 영역 설정 완료: {region['w']}×{region['h']}  "
-            f"@ ({region['x']}, {region['y']})", "ok"
-        )
+        self._log(f"캡처 영역 설정 완료: {region['w']}×{region['h']}  @ ({region['x']}, {region['y']})", "ok")
         self._save_settings()
 
     # ── 시작 / 정지 ───────────────────────────────────────────
     def _start(self):
         missing = []
-        if self.model     is None: missing.append("가중치 파일 선택 필요")
-        if self.cap_region is None: missing.append("캡처 영역 설정 필요")
-        if mss            is None: missing.append("pip install mss")
-        if cv2            is None: missing.append("pip install opencv-python")
-        if pydirectinput  is None: missing.append("pip install pydirectinput")
-        if kb             is None: missing.append("pip install keyboard")
+        if self.model is None:
+            missing.append("가중치 파일 선택 필요")
+        if self.cap_region is None:
+            missing.append("캡처 영역 설정 필요")
+        if mss is None:
+            missing.append("pip install mss")
+        if cv2 is None:
+            missing.append("pip install opencv-python")
+        if pydirectinput is None:
+            missing.append("pip install pydirectinput")
+        if kb is None:
+            missing.append("pip install keyboard")
         if missing:
             messagebox.showwarning("시작 불가", "\n".join(missing))
             return
 
         # 실행 파라미터 스냅샷 (worker 스레드가 읽음 → thread-safe)
         disp = self._var_order_disp.get()
-        order_key = CLICK_ORDER_KEYS[
-            CLICK_ORDER_LABELS.index(disp)
-        ] if disp in CLICK_ORDER_LABELS else "top_left"
+        order_key = CLICK_ORDER_KEYS[CLICK_ORDER_LABELS.index(disp)] if disp in CLICK_ORDER_LABELS else "top_left"
 
         self._run_params = {
-            "conf":   self._var_conf.get(),
-            "iou":    self._var_iou.get(),
-            "imgsz":  self._var_imgsz.get(),
+            "conf": self._var_conf.get(),
+            "iou": self._var_iou.get(),
+            "imgsz": self._var_imgsz.get(),
             "device": self._var_device.get(),
-            "order":  order_key,
+            "order": order_key,
         }
 
         self._running = True
@@ -583,7 +613,8 @@ class AutoClickApp:
             self._log(
                 f"시작됨  ·  단축키={hotkey.upper()}  "
                 f"conf={self._run_params['conf']:.2f}  "
-                f"imgsz={self._run_params['imgsz']}", "ok"
+                f"imgsz={self._run_params['imgsz']}",
+                "ok",
             )
         except Exception as e:
             self._log(f"단축키 등록 실패: {e}", "warn")
@@ -620,33 +651,35 @@ class AutoClickApp:
         self._is_busy = True
         t0 = time.perf_counter()
         try:
-            r   = self.cap_region
+            r = self.cap_region
             prm = self._run_params
 
             # ① 캡처 ─────────────────────────────────────────
             with mss.mss() as sct:
-                mon  = {"top": r["y"], "left": r["x"], "width": r["w"], "height": r["h"]}
+                mon = {"top": r["y"], "left": r["x"], "width": r["w"], "height": r["h"]}
                 shot = sct.grab(mon)
                 img_bgra = np.array(shot)
-                img_rgb  = img_bgra[:, :, [2, 1, 0]]   # BGRA → RGB
+                img_rgb = img_bgra[:, :, [2, 1, 0]]  # BGRA → RGB
 
             # ② YOLO 추론 ─────────────────────────────────────
             results = self.model(
                 img_rgb,
-                conf=prm["conf"], iou=prm["iou"],
-                imgsz=prm["imgsz"], device=prm["device"],
+                conf=prm["conf"],
+                iou=prm["iou"],
+                imgsz=prm["imgsz"],
+                device=prm["device"],
                 verbose=False,
             )
 
             # ③ 결과 파싱 & 시각화 이미지 생성 ─────────────────
             annotated = img_rgb.copy()
-            x_targets: list[tuple[int, int, float]] = []   # (cx, cy, conf)
+            x_targets: list[tuple[int, int, float]] = []  # (cx, cy, conf)
 
             for res in results:
                 if res.boxes is None:
                     continue
                 for box in res.boxes:
-                    cls_id   = int(box.cls[0])
+                    cls_id = int(box.cls[0])
                     cls_name = res.names.get(cls_id, str(cls_id))
                     conf_val = float(box.conf[0])
                     x1, y1, x2, y2 = (int(v) for v in box.xyxy[0].tolist())
@@ -654,17 +687,21 @@ class AutoClickApp:
 
                     color = CLS_COLOR.get(cls_name, (180, 180, 180))
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(annotated,
-                                f"{cls_name} {conf_val:.2f}",
-                                (x1, max(y1 - 4, 12)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1,
-                                cv2.LINE_AA)
+                    cv2.putText(
+                        annotated,
+                        f"{cls_name} {conf_val:.2f}",
+                        (x1, max(y1 - 4, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.42,
+                        color,
+                        1,
+                        cv2.LINE_AA,
+                    )
 
                     if cls_name == "X_BLACK":
                         x_targets.append((cx, cy, conf_val))
                         # 클릭 포인트 마커
-                        cv2.drawMarker(annotated, (cx, cy), (50, 220, 50),
-                                       cv2.MARKER_CROSS, 12, 2)
+                        cv2.drawMarker(annotated, (cx, cy), (50, 220, 50), cv2.MARKER_CROSS, 12, 2)
 
             # ④ 클릭 순서 정렬 ────────────────────────────────
             order = prm.get("order", "top_left")
@@ -684,13 +721,18 @@ class AutoClickApp:
                 n_clicked += 1
 
             # ⑥ 결과 로그 & 프리뷰 업데이트 ──────────────────
-            dt    = (time.perf_counter() - t0) * 1000
+            dt = (time.perf_counter() - t0) * 1000
             total = sum(len(res.boxes) for res in results if res.boxes)
-            tag   = "ok" if n_clicked > 0 else "info"
-            self._ui_q.put(("log", (
-                f"F9  감지={total}개  X_BLACK클릭={n_clicked}개  {dt:.0f}ms",
-                tag,
-            )))
+            tag = "ok" if n_clicked > 0 else "info"
+            self._ui_q.put(
+                (
+                    "log",
+                    (
+                        f"F9  감지={total}개  X_BLACK클릭={n_clicked}개  {dt:.0f}ms",
+                        tag,
+                    ),
+                )
+            )
             self._ui_q.put(("preview", annotated))
 
         except Exception as e:
@@ -715,10 +757,10 @@ class AutoClickApp:
 
     def _update_preview(self, img_rgb: np.ndarray):
         cw, ch = self._canvas_size
-        h, w   = img_rgb.shape[:2]
+        h, w = img_rgb.shape[:2]
         if w == 0 or h == 0:
             return
-        scale  = min(cw / w, ch / h)
+        scale = min(cw / w, ch / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         resized = cv2.resize(img_rgb, (nw, nh), interpolation=cv2.INTER_AREA)
 
@@ -730,7 +772,7 @@ class AutoClickApp:
 
     # ── 로그 ─────────────────────────────────────────────────
     def _log(self, text: str, tag: str = ""):
-        ts   = datetime.now().strftime("%H:%M:%S")
+        ts = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {text}\n"
         self._log_text.config(state="normal")
         self._log_text.insert("end", line, tag or "")
@@ -750,10 +792,7 @@ class AutoClickApp:
         self._apply_theme()
 
     def _resize_w(self, w: int):
-        self.root.geometry(
-            f"{w}x{self.root.winfo_height()}"
-            f"+{self.root.winfo_x()}+{self.root.winfo_y()}"
-        )
+        self.root.geometry(f"{w}x{self.root.winfo_height()}+{self.root.winfo_x()}+{self.root.winfo_y()}")
 
     def _save_win_pos(self):
         self._save_settings()
@@ -795,27 +834,23 @@ class AutoClickApp:
 # SimulationWindow  —  이미지 폴더 가상 클릭 시뮬레이션
 # ════════════════════════════════════════════════════════════
 class SimulationWindow(tk.Toplevel):
-    """
-    선택한 폴더의 이미지에 YOLO 추론을 실행하여
-    X_BLACK이 클릭될 위치를 시각적으로 확인하는 창.
-    실제 클릭은 하지 않음.
+    """선택한 폴더의 이미지에 YOLO 추론을 실행하여 X_BLACK이 클릭될 위치를 시각적으로 확인하는 창. 실제 클릭은 하지 않음.
     """
 
     IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-    def __init__(self, parent, folder: str, model, conf: float, iou: float,
-                 imgsz: int, device: str, log_fn):
+    def __init__(self, parent, folder: str, model, conf: float, iou: float, imgsz: int, device: str, log_fn):
         super().__init__(parent)
-        self.folder  = folder
-        self.model   = model
-        self.conf    = conf
-        self.iou     = iou
-        self.imgsz   = imgsz
-        self.device  = device
-        self._log    = log_fn
+        self.folder = folder
+        self.model = model
+        self.conf = conf
+        self.iou = iou
+        self.imgsz = imgsz
+        self.device = device
+        self._log = log_fn
 
-        self._results: list[dict] = []   # {path, annotated(np), n_x, n_o, n_ban}
-        self._photo   = None
+        self._results: list[dict] = []  # {path, annotated(np), n_x, n_o, n_ban}
+        self._photo = None
         self._stop_ev = threading.Event()
 
         self.title(f"시뮬레이션  —  {os.path.basename(folder)}")
@@ -831,26 +866,38 @@ class SimulationWindow(tk.Toplevel):
         top = tk.Frame(self, bg="#2d2d2d")
         top.pack(fill="x", padx=6, pady=(6, 2))
         self._lbl_summary = tk.Label(
-            top, text="처리 중…", bg="#2d2d2d", fg="#e0e0e0",
-            font=("Consolas", 9), anchor="w",
+            top,
+            text="처리 중…",
+            bg="#2d2d2d",
+            fg="#e0e0e0",
+            font=("Consolas", 9),
+            anchor="w",
         )
         self._lbl_summary.pack(side="left", fill="x", expand=True)
-        tk.Button(top, text="결과 저장 (annotated)", font=("Segoe UI", 8),
-                  command=self._save_results).pack(side="right", padx=4)
+        tk.Button(top, text="결과 저장 (annotated)", font=("Segoe UI", 8), command=self._save_results).pack(
+            side="right", padx=4
+        )
 
         # ── 본문 : 리스트 + 프리뷰 ───────────────────────────
         body = tk.Frame(self)
         body.pack(fill="both", expand=True, padx=6, pady=2)
 
         # 왼쪽: 파일 리스트
-        lf = tk.Frame(body, width=240); lf.pack(side="left", fill="y")
+        lf = tk.Frame(body, width=240)
+        lf.pack(side="left", fill="y")
         lf.pack_propagate(False)
         tk.Label(lf, text="이미지 목록", font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        sb = tk.Scrollbar(lf); sb.pack(side="right", fill="y")
-        self._listbox = tk.Listbox(lf, yscrollcommand=sb.set, font=("Consolas", 8),
-                                   bg="#1e1e1e", fg="#e0e0e0",
-                                   selectbackground="#0078d4",
-                                   activestyle="none")
+        sb = tk.Scrollbar(lf)
+        sb.pack(side="right", fill="y")
+        self._listbox = tk.Listbox(
+            lf,
+            yscrollcommand=sb.set,
+            font=("Consolas", 8),
+            bg="#1e1e1e",
+            fg="#e0e0e0",
+            selectbackground="#0078d4",
+            activestyle="none",
+        )
         self._listbox.pack(fill="both", expand=True)
         sb.config(command=self._listbox.yview)
         self._listbox.bind("<<ListboxSelect>>", self._on_select)
@@ -858,8 +905,7 @@ class SimulationWindow(tk.Toplevel):
         # 오른쪽: 캔버스 프리뷰
         self._canvas = tk.Canvas(body, bg="#111111", highlightthickness=0)
         self._canvas.pack(side="left", fill="both", expand=True, padx=(4, 0))
-        self._canvas.bind("<Configure>",
-                          lambda e: setattr(self, "_cv_size", (e.width, e.height)))
+        self._canvas.bind("<Configure>", lambda e: setattr(self, "_cv_size", (e.width, e.height)))
         self._cv_size = (640, 560)
 
         # ── 하단 진행 바 ──────────────────────────────────────
@@ -869,15 +915,13 @@ class SimulationWindow(tk.Toplevel):
     # ── 처리 루프 (백그라운드) ────────────────────────────────
     def _run(self):
         imgs = sorted(
-            p for p in (
-                os.path.join(self.folder, f) for f in os.listdir(self.folder)
-            )
+            p
+            for p in (os.path.join(self.folder, f) for f in os.listdir(self.folder))
             if os.path.splitext(p)[1].lower() in self.IMG_EXTS
         )
         total = len(imgs)
         if total == 0:
-            self.after(0, lambda: self._lbl_summary.config(
-                text="이미지 파일이 없습니다."))
+            self.after(0, lambda: self._lbl_summary.config(text="이미지 파일이 없습니다."))
             return
 
         self.after(0, lambda: self._progress.config(maximum=total))
@@ -896,8 +940,10 @@ class SimulationWindow(tk.Toplevel):
 
                 results = self.model(
                     img_rgb,
-                    conf=self.conf, iou=self.iou,
-                    imgsz=self.imgsz, device=self.device,
+                    conf=self.conf,
+                    iou=self.iou,
+                    imgsz=self.imgsz,
+                    device=self.device,
                     verbose=False,
                 )
 
@@ -908,50 +954,74 @@ class SimulationWindow(tk.Toplevel):
                     if res.boxes is None:
                         continue
                     for box in res.boxes:
-                        cls_id   = int(box.cls[0])
+                        cls_id = int(box.cls[0])
                         cls_name = res.names.get(cls_id, str(cls_id))
                         conf_val = float(box.conf[0])
                         x1, y1, x2, y2 = (int(v) for v in box.xyxy[0].tolist())
                         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-                        color  = CLS_COLOR.get(cls_name, (180, 180, 180))
+                        color = CLS_COLOR.get(cls_name, (180, 180, 180))
 
                         # 모든 클래스에 대해 rectangle 표시 (가시성 확보)
                         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                        cv2.putText(annotated, f"{cls_name} {conf_val:.3f}",
-                                    (x1, max(y1 - 4, 12)),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2, cv2.LINE_AA)
+                        cv2.putText(
+                            annotated,
+                            f"{cls_name} {conf_val:.3f}",
+                            (x1, max(y1 - 4, 12)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            color,
+                            2,
+                            cv2.LINE_AA,
+                        )
 
                         if cls_name == "X_BLACK":
                             n_x += 1
-                            cv2.drawMarker(annotated, (cx, cy), (50, 220, 50),
-                                           cv2.MARKER_CROSS, 14, 2)
-                            cv2.putText(annotated, f"X[{n_x}]",
-                                        (cx + 8, cy - 8),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (50, 220, 50), 2)
+                            cv2.drawMarker(annotated, (cx, cy), (50, 220, 50), cv2.MARKER_CROSS, 14, 2)
+                            cv2.putText(
+                                annotated,
+                                f"X[{n_x}]",
+                                (cx + 8, cy - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                (50, 220, 50),
+                                2,
+                            )
                         elif cls_name == "O_BLACK":
                             n_o += 1
                             # O_BLACK도 시각적으로 구분되도록 원 표시
                             cv2.circle(annotated, (cx, cy), 6, (255, 165, 0), 2)
-                            cv2.putText(annotated, f"O[{n_o}]",
-                                        (cx + 8, cy - 8),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 165, 0), 2)
+                            cv2.putText(
+                                annotated,
+                                f"O[{n_o}]",
+                                (cx + 8, cy - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                (255, 165, 0),
+                                2,
+                            )
                         else:
                             n_ban += 1
                             cv2.circle(annotated, (cx, cy), 8, (80, 140, 255), 2)
-                            cv2.putText(annotated, f"B[{n_ban}]",
-                                        (cx + 8, cy - 8),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 140, 255), 2)
+                            cv2.putText(
+                                annotated,
+                                f"B[{n_ban}]",
+                                (cx + 8, cy - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                (80, 140, 255),
+                                2,
+                            )
 
-                tot_x   += n_x
-                tot_o   += n_o
+                tot_x += n_x
+                tot_o += n_o
                 tot_ban += n_ban
 
                 entry = {
-                    "path":      path,
+                    "path": path,
                     "annotated": annotated,
-                    "n_x":       n_x,
-                    "n_o":       n_o,
-                    "n_ban":     n_ban,
+                    "n_x": n_x,
+                    "n_o": n_o,
+                    "n_ban": n_ban,
                 }
                 self._results.append(entry)
 
@@ -959,17 +1029,16 @@ class SimulationWindow(tk.Toplevel):
                 fname = os.path.basename(path)
                 # 모든 클래스 개수 표시
                 label = f"X{n_x:2d} O{n_o:3d} B{n_ban:2d}  |  {fname}"
-                idx   = len(self._results) - 1
+                idx = len(self._results) - 1
                 self.after(0, lambda lb=label, ix=idx: self._add_list_item(lb, ix))
-                self.after(0, lambda v=i+1: self._progress.config(value=v))
+                self.after(0, lambda v=i + 1: self._progress.config(value=v))
 
-            except Exception as e:
+            except Exception:
                 pass
 
         # 완료
         summary = (
-            f"완료  {len(self._results)}/{total}장  |  "
-            f"X_BLACK 클릭예정: {tot_x}  O_BLACK: {tot_o}  Ban: {tot_ban}"
+            f"완료  {len(self._results)}/{total}장  |  X_BLACK 클릭예정: {tot_x}  O_BLACK: {tot_o}  Ban: {tot_ban}"
         )
         self.after(0, lambda: self._lbl_summary.config(text=summary))
         self._log(f"[시뮬레이션] {summary}", "ok")
@@ -993,10 +1062,10 @@ class SimulationWindow(tk.Toplevel):
         if idx >= len(self._results):
             return
         entry = self._results[idx]
-        img   = entry["annotated"]
+        img = entry["annotated"]
         cw, ch = self._cv_size
-        h, w   = img.shape[:2]
-        scale  = min(cw / w, ch / h)
+        h, w = img.shape[:2]
+        scale = min(cw / w, ch / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         resized = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_AREA)
         bg = Image.new("RGB", (cw, ch), (17, 17, 17))
@@ -1005,12 +1074,13 @@ class SimulationWindow(tk.Toplevel):
         self._canvas.delete("all")
         self._canvas.create_image(0, 0, anchor="nw", image=self._photo)
         # 이미지 정보 오버레이
-        info = (f"X_BLACK(클릭):{entry['n_x']}  "
-                f"O_BLACK:{entry['n_o']}  Ban:{entry['n_ban']}  |  "
-                f"{os.path.basename(entry['path'])}")
+        info = (
+            f"X_BLACK(클릭):{entry['n_x']}  "
+            f"O_BLACK:{entry['n_o']}  Ban:{entry['n_ban']}  |  "
+            f"{os.path.basename(entry['path'])}"
+        )
         self._canvas.create_rectangle(0, 0, cw, 22, fill="#000000aa", outline="")
-        self._canvas.create_text(6, 11, anchor="w", text=info,
-                                 fill="#e0e0e0", font=("Consolas", 8))
+        self._canvas.create_text(6, 11, anchor="w", text=info, fill="#e0e0e0", font=("Consolas", 8))
 
     def _save_results(self):
         if not self._results:
@@ -1040,11 +1110,16 @@ class SimulationWindow(tk.Toplevel):
 # ════════════════════════════════════════════════════════════
 def _check_libs() -> list[str]:
     missing = []
-    if mss           is None: missing.append("mss")
-    if cv2           is None: missing.append("opencv-python")
-    if pydirectinput is None: missing.append("pydirectinput")
-    if kb            is None: missing.append("keyboard")
-    if YOLO          is None: missing.append("ultralytics")
+    if mss is None:
+        missing.append("mss")
+    if cv2 is None:
+        missing.append("opencv-python")
+    if pydirectinput is None:
+        missing.append("pydirectinput")
+    if kb is None:
+        missing.append("keyboard")
+    if YOLO is None:
+        missing.append("ultralytics")
     return missing
 
 
