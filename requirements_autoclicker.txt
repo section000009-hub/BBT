@@ -1,0 +1,7 @@
+ultralytics
+mss
+pydirectinput
+opencv-python
+Pillow
+numpy
+keyboard

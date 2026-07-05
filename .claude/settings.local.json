@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(cd /d \"d:\\\\바탕화면\")",
+      "Bash(python temp_color_gen.py)",
+      "PowerShell(python \"d:\\\\바탕화면\\\\temp_color_gen.py\")",
+      "Bash(nvidia-smi *)",
+      "Bash(python *)",
+      "Bash(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\train\\\\images\")",
+      "Bash(Measure-Object)",
+      "Bash(Select-Object -ExpandProperty Count)",
+      "Bash(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\valid\\\\images\")",
+      "Bash(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\test\\\\images\")",
+      "PowerShell(\\(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\train\\\\images\"\\).Count; \\(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\valid\\\\images\"\\).Count; \\(Get-ChildItem \"d:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\dataset\\\\test\\\\images\"\\).Count)",
+      "Bash(Select-String \"auto_click\")",
+      "PowerShell(\\(Get-Content \"D:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\auto_click_debug.py\"\\).Count)",
+      "PowerShell(pip install *)",
+      "PowerShell(Get-Process *)",
+      "Skill(claude-api)",
+      "Bash(dir \"D:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\\" | head -20 *)",
+      "PowerShell(head *)"
+    ]
+  }
+}

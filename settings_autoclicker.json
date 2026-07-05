@@ -1,0 +1,13 @@
+{
+  "weight_path": "D:/VIBE/ultralytics-main-yolov26/ultralytics-main/best_260629.pt",
+  "device": "cuda:0",
+  "conf": 0.05,
+  "iou": 0.45,
+  "imgsz": 640,
+  "click_order": "top_left",
+  "capture_region": null,
+  "window_geometry": "815x1072+73+246",
+  "always_on_top": true,
+  "dark_mode": false,
+  "hotkey": "f9"
+}
