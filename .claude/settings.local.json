@@ -19,7 +19,31 @@
       "PowerShell(Get-Process *)",
       "Skill(claude-api)",
       "Bash(dir \"D:\\\\VIBE\\\\ultralytics-main-yolov26\\\\ultralytics-main\\\\\" | head -20 *)",
-      "PowerShell(head *)"
+      "PowerShell(head *)",
+      "PowerShell(nvidia-smi *)",
+      "PowerShell(python -m pip index versions torch 2>&1 | Select-Object -First 5; echo \"---\"; python -c \"import sys; print\\(sys.version\\)\")",
+      "PowerShell(python -m pip install torch --index-url https://download.pytorch.org/whl/cu128 --dry-run 2>&1 | Select-Object -First 20)",
+      "PowerShell(python -m pip install torch --index-url https://download.pytorch.org/whl/cu128 --force-reinstall --no-deps --dry-run 2>&1 | Select-Object -First 20)",
+      "PowerShell(python -m pip uninstall torch torchvision -y)",
+      "PowerShell(python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128)",
+      "PowerShell(python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('cuda available:', torch.cuda.is_available\\(\\)\\); print\\('device:', torch.cuda.get_device_name\\(0\\) if torch.cuda.is_available\\(\\) else 'N/A'\\)\")",
+      "PowerShell(Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=\\(Get-Date\\).AddDays\\(-2\\)} -ErrorAction SilentlyContinue | Select-Object -First 20 TimeCreated, Id, ProviderName, Message | Format-List)",
+      "PowerShell(conda env list 2>&1)",
+      "PowerShell(nvidia-smi 2>&1)",
+      "PowerShell(Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\\\Microsoft\\\\Windows\\\\DeviceGuard -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -ErrorAction SilentlyContinue)",
+      "Bash(powershell -Command \"Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='nvlddmkm'} -MaxEvents 20 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, LevelDisplayName, Message | Format-List\")",
+      "PowerShell(nvidia-smi)",
+      "Artifact",
+      "PowerShell(python --version)",
+      "PowerShell(conda *)",
+      "PowerShell(python -c \"import torch; print\\(f'PyTorch: {torch.__version__}'\\); print\\(f'CUDA Available: {torch.cuda.is_available\\(\\)}'\\); print\\(f'CUDA Version: {torch.version.cuda}'\\)\")",
+      "PowerShell(Get-Command *)",
+      "PowerShell(dir \"$env:USERPROFILE\\\\anaconda3\" -ErrorAction SilentlyContinue; dir \"$env:USERPROFILE\\\\miniconda3\" -ErrorAction SilentlyContinue)",
+      "PowerShell(python -c \"import torch; import torchvision; print\\(f'PyTorch: {torch.__version__}'\\); print\\(f'Torchvision: {torchvision.__version__}'\\); print\\(f'CUDA Available: {torch.cuda.is_available\\(\\)}'\\); print\\(f'CUDA Version: {torch.version.cuda}'\\); print\\(f'GPU: {torch.cuda.get_device_name\\(0\\) if torch.cuda.is_available\\(\\) else \\\\\"N/A\\\\\"}'\\)\")",
+      "Bash(conda list *)",
+      "Bash(pip list *)"
     ]
   }
 }

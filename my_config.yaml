@@ -2,18 +2,18 @@
 # mode: train
 
 # Train settings -------------------------------------------------------------------------------------------------------
-model: yolo26n.pt
+model: yolo26s.pt
 data: ./dataset/data.yaml
-epochs: 5000
-batch: 32          # 16→32: 3070 Ti 8GB + yolo26n nano에서 여유 충분 (VRAM ~5-6GB 예상)
+epochs: 1000
+batch: 8          # 40→32: GPU 메모리 여유 증가 (VRAM 사용량 감소, 시스템 응답성 개선)
 imgsz: 640
 device: 0
 patience: 100
-workers: 8         # CPU 20코어 활용, 데이터로딩 병목 제거
-cache: True        # 286장 전체 RAM 캐시 (32GB RAM 여유, epoch당 디스크 I/O 제거)
-amp: True          # AMP FP16 가속 (RTX 3070 Ti Ampere 텐서코어)
+workers: 8         # 8→4: CPU 스레드 수 줄임 (시스템 반응성 개선, 데이터로딩 병목 여전히 해결)
+cache: True        # True→disk: RAM 대신 SSD 캐시 사용 (메모리 압박 해소, 약간의 속도 트레이드오프)
+amp: True
 project: ./runs
-name: phase1_ox_black
+name: x_red_only
 save_period: 100   # 장기 학습 중 100에포크마다 중간 체크포인트 백업
 
 # optimizer: SGD   # detect task 기본값, 필요시 명시
@@ -22,3 +22,15 @@ save_period: 100   # 장기 학습 중 100에포크마다 중간 체크포인트
 # momentum: 0.937
 # weight_decay: 0.0005
 # warmup_epochs: 3.0
+
+# ===== 성능 최적화 옵션 =====
+# half: True         # FP16 학습 (GPU 메모리 ~50% 감소)
+# hsv_h: 0.015       # 데이터 증강 약화 (CPU 부하 감소)
+# hsv_s: 0.7
+# hsv_v: 0.4
+# degrees: 10        # 회전각 축소
+# translate: 0.1
+# scale: 0.5
+# flipud: 0.0        # 수직뒤집기 제거
+# fliplr: 0.5
+# mosaic: 0.5        # Mosaic 데이터 증강 확률 축소

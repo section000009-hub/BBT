@@ -122,8 +122,18 @@ class RegionSelector(tk.Toplevel):
         self._sx = self._sy = 0
         self._rect_id = None
 
+        # -fullscreen 속성은 보통 "창이 떠 있는 모니터 1개"만 덮어서
+        # 듀얼(멀티) 모니터 환경에서는 다른 모니터 위 드래그를 못 잡는 문제가 있었음.
+        # → 모든 모니터를 합친 가상 화면(virtual screen) 전체 크기로 직접 지정.
+        SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN = 76, 77
+        SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN = 78, 79
+        vx = windll.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+        vy = windll.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+        vw = windll.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+        vh = windll.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+
         self.overrideredirect(True)
-        self.attributes("-fullscreen", True)
+        self.geometry(f"{vw}x{vh}+{vx}+{vy}")
         self.attributes("-alpha", 0.25)
         self.attributes("-topmost", True)
         self.configure(bg="black")
@@ -140,7 +150,16 @@ class RegionSelector(tk.Toplevel):
         self.cv.bind("<ButtonPress-1>",   self._press)
         self.cv.bind("<B1-Motion>",       self._drag)
         self.cv.bind("<ButtonRelease-1>", self._release)
-        self.bind("<Escape>", lambda _: self.destroy())
+        self.bind("<Escape>", lambda _: (self.destroy(), self._cb(None)))
+
+        # overrideredirect 창은 자동으로 포커스를 못 받는 경우가 있어
+        # 마우스/ESC 입력이 씹히는 문제가 생김 → 창이 실제로 화면에 그려진 뒤 강제로 포커스/그랩 확보
+        self.update_idletasks()
+        self.focus_force()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
 
     def _press(self, e):
         self._sx, self._sy = e.x_root, e.y_root
@@ -150,9 +169,11 @@ class RegionSelector(tk.Toplevel):
     def _drag(self, e):
         if self._rect_id:
             self.cv.delete(self._rect_id)
+        # 캔버스 로컬 좌표계로 변환 (창이 화면 (0,0)에 있지 않은 경우 대비)
+        ox, oy = self.winfo_rootx(), self.winfo_rooty()
         self._rect_id = self.cv.create_rectangle(
-            self._sx, self._sy, e.x_root, e.y_root,
-            outline="#ff4444", width=2, dash=(5, 3),
+            self._sx - ox, self._sy - oy, e.x_root - ox, e.y_root - oy,
+            outline="#0078d4", width=4, dash=(6, 3),
         )
 
     def _release(self, e):
@@ -163,6 +184,8 @@ class RegionSelector(tk.Toplevel):
         self.destroy()
         if w > 20 and h > 20:
             self._cb({"x": x, "y": y, "w": w, "h": h})
+        else:
+            self._cb(None)
 
 
 # ════════════════════════════════════════════════════════════
@@ -174,6 +197,9 @@ class AutoClickApp:
         self.root      = root
         self.settings  = self._load_settings()
         self.model     = None
+        self._loaded_weight_path: str | None = None
+        self._model_loading = False
+        self._model_load_gen = 0
         self.cap_region: dict | None = self.settings.get("capture_region")
 
         self._running   = False
@@ -503,36 +529,58 @@ class AutoClickApp:
             self._load_model_async()
 
     def _load_model_async(self):
+        self._model_load_gen += 1
+        gen = self._model_load_gen
+        self._model_loading = True
         self._lbl_model.config(text="로딩 중…")
         self._log("모델 로딩 중…", "info")
-        threading.Thread(target=self._load_model, daemon=True).start()
+        threading.Thread(target=self._load_model, args=(gen,), daemon=True).start()
 
-    def _load_model(self):
+    def _load_model(self, gen: int):
         path = self._var_weight.get()
         if not path or not os.path.exists(path):
+            if gen == self._model_load_gen:
+                self._model_loading = False
             self._ui_q.put(("log",    ("가중치 파일을 찾을 수 없습니다.", "err")))
             self._ui_q.put(("model",  "미로드"))
             return
         if YOLO is None:
+            if gen == self._model_load_gen:
+                self._model_loading = False
             self._ui_q.put(("log",   ("ultralytics 미설치. pip install ultralytics", "err")))
             return
         try:
             m = YOLO(path)
+            if gen != self._model_load_gen:
+                # 로딩 중 더 최신 가중치 선택으로 대체됨 — 이 결과는 폐기
+                return
             self.model = m
+            self._loaded_weight_path = path
+            self._model_loading = False
             names = list(m.names.values()) if hasattr(m, "names") else []
             self._ui_q.put(("log",   (f"모델 로드 완료  ·  클래스: {names}", "ok")))
             self._ui_q.put(("model", f"✔ {os.path.basename(path)}"))
         except Exception as e:
+            if gen == self._model_load_gen:
+                self._model_loading = False
             self._ui_q.put(("log",   (f"모델 로드 실패: {e}", "err")))
             self._ui_q.put(("model", "로드 실패"))
 
     # ── 캡처 영역 선택 ────────────────────────────────────────
     def _select_capture_region(self):
-        self.root.withdraw()
-        self.root.after(150, lambda: RegionSelector(self.root, self._on_region_set))
+        # 메인 창을 숨기지 않고 그대로 둔 채, 그 위에 반투명 드래그 오버레이만 띄움.
+        # 단, 메인 창도 "항상 위"라면 오버레이와 topmost 자리를 다투다가
+        # 드래그 시작 클릭이 오버레이 대신 메인 창으로 들어갈 수 있어 잠시 꺼둠.
+        self._region_prev_topmost = self.root.attributes("-topmost")
+        if self._region_prev_topmost:
+            self.root.attributes("-topmost", False)
+        RegionSelector(self.root, self._on_region_set)
 
-    def _on_region_set(self, region: dict):
-        self.root.deiconify()
+    def _on_region_set(self, region: dict | None):
+        if getattr(self, "_region_prev_topmost", False):
+            self.root.attributes("-topmost", True)
+        if region is None:
+            return
         self.cap_region = region
         self._refresh_region_label()
         self._log(
@@ -628,11 +676,15 @@ class AutoClickApp:
                 mon  = {"top": r["y"], "left": r["x"], "width": r["w"], "height": r["h"]}
                 shot = sct.grab(mon)
                 img_bgra = np.array(shot)
-                img_rgb  = img_bgra[:, :, [2, 1, 0]]   # BGRA → RGB
+                img_bgr  = img_bgra[:, :, :3]          # BGRA → BGR (YOLO 추론용)
+                img_rgb  = img_bgra[:, :, [2, 1, 0]]   # BGRA → RGB (시각화용)
 
             # ② YOLO 추론 ─────────────────────────────────────
+            # ultralytics는 numpy 배열 입력을 BGR(cv2 기본 포맷)로 간주하고
+            # 내부에서 자체적으로 BGR→RGB 변환을 수행하므로, 여기서 RGB로
+            # 미리 바꿔서 넘기면 채널이 두 번 뒤집혀 추론이 깨짐 → BGR을 그대로 전달.
             results = self.model(
-                img_rgb,
+                img_bgr,
                 conf=prm["conf"], iou=prm["iou"],
                 imgsz=prm["imgsz"], device=prm["device"],
                 verbose=False,
@@ -767,8 +819,21 @@ class AutoClickApp:
 
     # ── 시뮬레이션 ────────────────────────────────────────────
     def _open_simulation(self):
-        if self.model is None:
+        current_path = self._var_weight.get()
+        if not current_path:
             messagebox.showwarning("시뮬레이션", "가중치 파일을 먼저 선택하세요.")
+            return
+        # 메인 화면에 표시된 가중치가 아직 로드되지 않았다면(선택 직후 등) 새로 로드
+        if self._loaded_weight_path != current_path and not self._model_loading:
+            self._load_model_async()
+        self._wait_model_then_open_simulation(current_path)
+
+    def _wait_model_then_open_simulation(self, target_path: str):
+        if self._model_loading:
+            self.root.after(150, lambda: self._wait_model_then_open_simulation(target_path))
+            return
+        if self.model is None or self._loaded_weight_path != target_path:
+            messagebox.showerror("시뮬레이션", "가중치 파일 로드에 실패했습니다.")
             return
         init_dir = self.settings.get("sim_folder", DEFAULT_SIM_FOLDER)
         folder = filedialog.askdirectory(
@@ -783,6 +848,7 @@ class AutoClickApp:
             parent=self.root,
             folder=folder,
             model=self.model,
+            weight_path=self._loaded_weight_path,
             conf=self._var_conf.get(),
             iou=self._var_iou.get(),
             imgsz=self._var_imgsz.get(),
@@ -803,11 +869,12 @@ class SimulationWindow(tk.Toplevel):
 
     IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-    def __init__(self, parent, folder: str, model, conf: float, iou: float,
-                 imgsz: int, device: str, log_fn):
+    def __init__(self, parent, folder: str, model, weight_path: str | None,
+                 conf: float, iou: float, imgsz: int, device: str, log_fn):
         super().__init__(parent)
-        self.folder  = folder
-        self.model   = model
+        self.folder      = folder
+        self.model       = model
+        self.weight_path = weight_path
         self.conf    = conf
         self.iou     = iou
         self.imgsz   = imgsz
@@ -818,7 +885,8 @@ class SimulationWindow(tk.Toplevel):
         self._photo   = None
         self._stop_ev = threading.Event()
 
-        self.title(f"시뮬레이션  —  {os.path.basename(folder)}")
+        weight_label = os.path.basename(weight_path) if weight_path else "알 수 없음"
+        self.title(f"시뮬레이션  —  {os.path.basename(folder)}  ·  가중치: {weight_label}")
         self.geometry("900x620")
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -868,6 +936,8 @@ class SimulationWindow(tk.Toplevel):
 
     # ── 처리 루프 (백그라운드) ────────────────────────────────
     def _run(self):
+        weight_name = os.path.basename(self.weight_path) if self.weight_path else "알 수 없음"
+        self._log(f"[시뮬레이션] 사용 가중치: {weight_name}  ({self.weight_path})", "info")
         imgs = sorted(
             p for p in (
                 os.path.join(self.folder, f) for f in os.listdir(self.folder)
@@ -894,8 +964,11 @@ class SimulationWindow(tk.Toplevel):
                     continue
                 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
+                # ultralytics는 numpy 배열 입력을 BGR로 간주해 내부에서 자체
+                # BGR→RGB 변환을 하므로, 여기서 미리 RGB로 바꾼 img_rgb를 넘기면
+                # 채널이 두 번 뒤집혀 추론이 깨짐 → 원본 BGR(img_bgr)을 그대로 전달.
                 results = self.model(
-                    img_rgb,
+                    img_bgr,
                     conf=self.conf, iou=self.iou,
                     imgsz=self.imgsz, device=self.device,
                     verbose=False,

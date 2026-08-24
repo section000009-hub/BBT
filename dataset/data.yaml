@@ -1,0 +1,23 @@
+# train: train/images
+# val: valid/images
+# test: test/images
+
+# nc: 3
+# names: ['Ban', 'O_BLACK', 'X_BLACK']
+
+# roboflow:
+#   workspace: ter-dex
+#   project: 260604_ox_black
+#   version: 4
+#   license: CC BY 4.0
+#   url: https://universe.roboflow.com/ter-dex/260604_ox_black/dataset/4
+
+
+# 260824 x_red 클래스만 있음 실헝용임
+
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 1
+names: ['x_red']

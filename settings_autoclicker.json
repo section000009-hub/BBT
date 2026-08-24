@@ -1,12 +1,17 @@
 {
-  "weight_path": "D:/VIBE/ultralytics-main-yolov26/ultralytics-main/best_260629.pt",
+  "weight_path": "D:/VIBE/BBT/best_260707.pt",
   "device": "cuda:0",
-  "conf": 0.05,
+  "conf": 0.3,
   "iou": 0.45,
   "imgsz": 640,
   "click_order": "top_left",
-  "capture_region": null,
-  "window_geometry": "815x1072+73+246",
+  "capture_region": {
+    "x": 2220,
+    "y": 667,
+    "w": 1599,
+    "h": 774
+  },
+  "window_geometry": "815x1072+658+645",
   "always_on_top": true,
   "dark_mode": false,
   "hotkey": "f9"
